@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -24,3 +25,18 @@ class User(Base):
     def __setitem__(self, key, value):
         getattr(self, key)
         return setattr(self, key, value)
+
+
+class Comment(Base):
+    __tablename__ = 'comments'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'))
+    text = Column(String(300), nullable=False)
+
+    user = relationship("User", back_populates="comments")
+
+    def __repr__(self):
+        return f"<Comment(text={self.text})>"
+
+User.comments = relationship('Comment', order_by=Comment.id, back_populates="user")

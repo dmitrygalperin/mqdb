@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import pika
 from config import MqConfig
-from sorcery import Sorcery
+from dbcon import Dbcon
 import sys
 import logging
 import json
@@ -16,9 +16,8 @@ READ   = 'read'
 UPDATE = 'update'
 DELETE = 'delete'
 
-#Query filters
 
-class Pikachu(object):
+class Mqdb(object):
 
     '''
     Middleware that subscribes to RabbitMQ RPC channel via pika and translates
@@ -27,11 +26,14 @@ class Pikachu(object):
     Example request format:
 
     {
-        method: 'create',
-        resource: 'user',
-        columns: [
-            {name: 'username', value: 'test_user'}
-        ]
+        'method': 'update',
+    	'resource': 'user',
+    	'where': [
+    		['username', '==', 'jimbo']
+    	],
+    	'values': {
+    		'username': 'newusername'
+    	}
     }
     '''
 
@@ -43,7 +45,7 @@ class Pikachu(object):
         self.virtual_host = MqConfig.virtual_host
         self.queue        = MqConfig.queue
 
-        self.session = Sorcery.get_session()
+        self.session = Dbcon.get_session()
         self.logger = logging.getLogger('mqdb')
         self.logger.addHandler(logging.StreamHandler())
 
@@ -51,8 +53,8 @@ class Pikachu(object):
         try:
             credentials = pika.PlainCredentials(self.username, self.password)
             return pika.BlockingConnection(pika.ConnectionParameters(self.host, self.port, self.virtual_host, credentials))
-        except: #TODO: Catch specific errors
-            self.logger.critical(sys.exc_info())
+        except Exception as e:
+            self.logger.critical(e)
             return
 
     def get_channel(self):
@@ -69,7 +71,7 @@ class Pikachu(object):
     def listen(self):
         channel = self.get_channel()
         if channel:
-            self.logger.info(f'\tAwaiting requests on {self.host}:{self.port}{self.virtual_host}')
+            self.logger.info(f'Awaiting requests on {self.host}:{self.port}{self.virtual_host}')
             channel.start_consuming()
 
     def on_request(self, ch, method, props, body):
@@ -88,82 +90,67 @@ class Pikachu(object):
         ch.basic_ack(delivery_tag = method.delivery_tag)
 
     def fill_request(self, request):
-        request_method = request.get('method').lower()
+        req_method = request.get('method').lower()
         req_resource = request.get('resource').lower()
-        Resource = Sorcery.get_resource(req_resource)
+        vald = request.get('values')
+        where_list = request.get('where')
+        Resource = Dbcon.get_resource(req_resource)
 
         if not Resource:
-            return {'error': f"The specified resource <{req_resource}> doesn't exist"}
-        try:
-            if request_type == CREATE:
-                return self.create(request, Resource)
-            elif request_method == READ:
-                rows = self.read(request, Resource)
-                rows = [row.to_dict() for row in rows]
-                return {'success': True, 'result': rows}
-            elif request_method == UPDATE:
-                return self.update(request, Resource)
-            elif request_method == DELETE:
-                return self.delete(request, Resource)
-            else:
-                return {'error': "Invalid request type. Valid types are create, read, update, delete. e.g {type: 'create'}"}
-        except SQLAlchemyError as e:
-            return {'success': False, 'result': str(e)}
+            return {'message': f"The specified resource <{req_resource}> doesn't exist"}
+        tbl = Resource.__table__
 
-    def create(self, request, Resource):
-        columns = request.get('columns')
-        try:
-            for key, value in columns.items():
-                resource[key] = value
-        except AttributeError as e:
-            return {'success': False, 'message': str(e)}
+        if req_method == CREATE:
+            stmt = tbl.insert()
+        elif req_method == READ:
+            stmt = tbl.select()
+        elif req_method == UPDATE:
+            stmt = tbl.update()
+        elif req_method == DELETE:
+            stmt = tbl.delete()
+        else:
+            return {'message': "Invalid request type. Valid types are create, read, update, delete. e.g {method: 'create'}"}
 
         try:
-            self.session.add(resource)
+            if where_list:
+                stmt = self.set_where(where_list, stmt, tbl)
+            if vald:
+                stmt = stmt.values(**vald)
+        except Exception as e:
+            return {'message': str(e)}
+
+        return self.execute(stmt)
+
+    def execute(self, stmt):
+        self.logger.info(stmt)
+        try:
+            res = self.session.execute(stmt)
             self.session.commit()
-            return {'success': True, request.get('resource').lower(): resource.to_dict()}
-        except SQLAlchemyError as e:
+            try:
+                return {'rows': [dict(row) for row in res]}
+            except:
+                return {'affected': res.rowcount}
+        except Exception as e:
+            self.logger.info(e)
             self.session.rollback()
-            return {'success': False, 'message': str(e)}
+            return {'message': str(e)}
 
-    def read(self, request, Resource):
-        filters = request.get('filters')
-        rows = self.session.query(Resource)
-
-        for flt in filters :
-            col = getattr(Resource, flt[0])
-            op = flt[1]
-            comp = flt[2]
+    def set_where(self, where_list, stmt, tbl):
+        for where in where_list :
+            col = getattr(tbl.c, where[0])
+            op = where[1]
+            comp = where[2]
             if op == '==':
-                rows = rows.filter(col==comp)
+                stmt = stmt.where(col==comp)
             elif op == '!=':
-                rows = rows.filter(col!=comp)
+                stmt = stmt.where(col!=comp)
             elif op == 'like':
-                rows = rows.filter(col.like(comp))
+                stmt = stmt.where(col.like(comp))
             elif op == 'in':
-                rows = rows.filter(~col.in_(comp))
-            #will add more operators if necessary
-        return rows
-
-    def update(self, request, Resource):
-        rows = self.read(request, Resource)
-        num_rows = len(list(rows))
-        for row in rows:
-            for key, val in request.get('values').items():
-                row[key] = val
-        self.session.commit()
-        return {'success': True, 'updated': num_rows}
-
-    def delete(self, request, Resource):
-        rows = self.read(request, Resource)
-        num_rows = len(list(rows))
-        for row in rows:
-            self.session.delete(row)
-        self.session.commit()
-        return {'success': True, 'deleted': num_rows}
-
+                stmt = stmt.where(~col.in_(comp))
+        return stmt
 
 
 if __name__ == '__main__':
-    pikachu = Pikachu()
-    pikachu.listen()
+    mqdb = Mqdb()
+    mqdb.listen()

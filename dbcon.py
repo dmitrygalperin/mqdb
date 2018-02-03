@@ -19,11 +19,11 @@ RESOURCES = {
 }
 
 
-class Sorcery(object):
+class Dbcon(object):
 
     '''Static class that creates SQLAlchemy engine and session'''
 
-    logger = logging.getLogger('sorcery')
+    logger = logging.getLogger('dbcon')
     logger.addHandler(logging.StreamHandler())
 
     @classmethod

@@ -2,13 +2,12 @@
 import pika
 import uuid
 import json
-import config
 
 #Example CRUD Requests
 create_request = {
 	'method': 'create',
 	'resource': 'user',
-	'columns': {
+	'values': {
 		'username': 'jimbo',
 		'password': 'passw',
 		'email': 'a@a.com'
@@ -18,7 +17,7 @@ create_request = {
 read_request = {
 	'method': 'read',
 	'resource': 'user',
-	'filters': [
+	'where': [
 		['username', '==', 'jimbo']
 	]
 }
@@ -26,19 +25,19 @@ read_request = {
 delete_request = {
 	'method': 'delete',
 	'resource': 'user',
-	'filters': [
-		['username', '==', 'jimbo']
+	'where': [
+		['username', '==', 'bbbb']
 	]
 }
 
 update_request = {
 	'method': 'update',
 	'resource': 'user',
-	'filters': [
-		['username', '==', 'bob']
+	'where': [
+		['username', '==', 'jimbo']
 	],
 	'values': {
-		'username': 'joe'
+		'username': 'bbbb'
 	}
 }
 
@@ -63,14 +62,16 @@ class ClientExample(object):
 	def call(self, username):
 		self.response = None
 		self.corr_id = str(uuid.uuid4())
-		self.channel.basic_publish(	exchange='',
-									routing_key='db',
-									properties=pika.BasicProperties(
-										reply_to = self.callback_queue,
-										correlation_id = self.corr_id,
-                                        content_type = 'application/json'
-										),
-									body=username)
+		self.channel.basic_publish(
+			exchange='',
+			routing_key='db',
+			properties=pika.BasicProperties(
+				reply_to = self.callback_queue,
+				correlation_id = self.corr_id,
+				content_type = 'application/json'
+			),
+			body=username
+		)
 		while self.response is None:
 			self.connection.process_data_events()
 		return self.response
@@ -78,5 +79,5 @@ class ClientExample(object):
 test_client = ClientExample()
 
 print(" [x] Requesting...")
-response = test_client.call(json.dumps(update_request))
+response = test_client.call(json.dumps(read_request))
 print(f" [.] Got {response}")
