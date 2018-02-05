@@ -71,7 +71,7 @@ class Mqdb(object):
     def listen(self):
         channel = self.get_channel()
         if channel:
-            self.logger.info(f'Awaiting requests on {self.host}:{self.port}{self.virtual_host}')
+            self.logger.info('Awaiting requests on {}:{}{}'.format(self.host, self.port, self.virtual_host))
             channel.start_consuming()
 
     def on_request(self, ch, method, props, body):
@@ -79,14 +79,14 @@ class Mqdb(object):
             request = json.loads(body)
             response = self.fill_request(request)
         except JSONDecodeError as e:
-            response = {'error': f'{type(e).__name__}: {str(e)}'}
+            response = {'error': '{}: {}'.format(type(e).__name__, str(e))}
         ch.basic_publish(
             exchange='',
             routing_key=props.reply_to,
             properties=pika.BasicProperties(correlation_id = props.correlation_id),
             body=json.dumps(response)
         )
-        self.logger.info(f'\t\tReceived: {request}\n\t\tReturned: {response}')
+        self.logger.info('\t\tReceived: {}\n\t\tReturned: {}'.format(request, response))
         ch.basic_ack(delivery_tag = method.delivery_tag)
 
     def fill_request(self, request):
@@ -97,31 +97,28 @@ class Mqdb(object):
             where_list = request.get('where')
             order_by = request.get('orderBy')
             Resource = Dbcon.get_resource(req_resource)
-        except Exception as e:
-            return {'message': str(e)}
 
-        if not Resource:
-            return {'message': f"The specified resource <{req_resource}> doesn't exist"}
-        tbl = Resource.__table__
+            if not Resource:
+                return {'message': "The specified resource <{}> doesn't exist".format(req_resource)}
+            tbl = Resource.__table__
 
-        if req_method == CREATE:
-            stmt = tbl.insert()
-        elif req_method == READ:
-            stmt = tbl.select()
-        elif req_method == UPDATE:
-            stmt = tbl.update()
-        elif req_method == DELETE:
-            stmt = tbl.delete()
-        else:
-            return {'message': "Invalid request type. Valid types are create, read, update, delete. e.g {method: 'create'}"}
+            if req_method == CREATE:
+                stmt = tbl.insert()
+            elif req_method == READ:
+                stmt = tbl.select()
+            elif req_method == UPDATE:
+                stmt = tbl.update()
+            elif req_method == DELETE:
+                stmt = tbl.delete()
+            else:
+                return {'message': "Invalid request type. Valid types are create, read, update, delete. e.g {method: 'create'}"}
 
-        try:
-            if where_list:
-                stmt = self.set_where(where_list, stmt, tbl)
-            if vald:
-                stmt = stmt.values(**vald)
-            if order_by:
-                stmt = self.set_order_by(order_by, stmt, tbl)
+                if where_list:
+                    stmt = self.set_where(where_list, stmt, tbl)
+                if vald:
+                    stmt = stmt.values(**vald)
+                if order_by:
+                    stmt = self.set_order_by(order_by, stmt, tbl)
         except Exception as e:
             self.logger.info(str(e))
             return {'message': str(e)}

@@ -29,7 +29,7 @@ class Dbcon(object):
     @classmethod
     def get_engine(cls):
         try:
-            engine = create_engine(f'{DB_TYPE}://{USERNAME}:{PASSWORD}@{HOST}/{DB_NAME}')
+            engine = create_engine('{}://{}:{}@{}/{}'.format(DB_TYPE, USERNAME, PASSWORD, HOST, DB_NAME))
             engine.connect()
             return engine
         except: #TODO: Catch specific errors
