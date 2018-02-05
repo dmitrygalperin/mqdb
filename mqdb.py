@@ -113,17 +113,17 @@ class Mqdb(object):
             else:
                 return {'message': "Invalid request type. Valid types are create, read, update, delete. e.g {method: 'create'}"}
 
-                if where_list:
-                    stmt = self.set_where(where_list, stmt, tbl)
-                if vald:
-                    stmt = stmt.values(**vald)
-                if order_by:
-                    stmt = self.set_order_by(order_by, stmt, tbl)
+            if where_list:
+                stmt = self.set_where(where_list, stmt, tbl)
+            if vald:
+                stmt = stmt.values(**vald)
+            if order_by:
+                stmt = self.set_order_by(order_by, stmt, tbl)
         except Exception as e:
             self.logger.info(str(e))
             return {'message': str(e)}
 
-        self.logger.info(stmt)
+        self.logger.info(vald)
 
         return self.execute(stmt)
 
