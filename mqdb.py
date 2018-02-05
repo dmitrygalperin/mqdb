@@ -90,11 +90,15 @@ class Mqdb(object):
         ch.basic_ack(delivery_tag = method.delivery_tag)
 
     def fill_request(self, request):
-        req_method = request.get('method').lower()
-        req_resource = request.get('resource').lower()
-        vald = request.get('values')
-        where_list = request.get('where')
-        Resource = Dbcon.get_resource(req_resource)
+        try:
+            req_method = request.get('method').lower()
+            req_resource = request.get('resource').lower()
+            vald = request.get('values')
+            where_list = request.get('where')
+            order_by = request.get('orderBy')
+            Resource = Dbcon.get_resource(req_resource)
+        except Exception as e:
+            return {'message': str(e)}
 
         if not Resource:
             return {'message': f"The specified resource <{req_resource}> doesn't exist"}
@@ -116,7 +120,10 @@ class Mqdb(object):
                 stmt = self.set_where(where_list, stmt, tbl)
             if vald:
                 stmt = stmt.values(**vald)
+            if order_by:
+                stmt = self.set_order_by(order_by, stmt, tbl)
         except Exception as e:
+            self.logger.info(str(e))
             return {'message': str(e)}
 
         return self.execute(stmt)
@@ -149,6 +156,13 @@ class Mqdb(object):
             elif op == 'in':
                 stmt = stmt.where(~col.in_(comp))
         return stmt
+
+    def set_order_by(self, order_by, stmt, tbl):
+        colname, direction = tuple(order_by)
+        self.logger.info(colname,direction)
+        col = getattr(tbl.c, colname)
+        order_func = col.desc() if direction == 'desc' else col.asc()
+        return stmt.order_by(order_func)
 
 
 if __name__ == '__main__':

@@ -33,7 +33,7 @@ class Dbcon(object):
             engine.connect()
             return engine
         except: #TODO: Catch specific errors
-            logger.critical(sys.exc_info())
+            cls.logger.critical(sys.exc_info())
             return
 
     @classmethod
