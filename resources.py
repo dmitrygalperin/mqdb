@@ -17,7 +17,7 @@ class User(Base):
         return {'id': self.id, 'username': self.username, 'email': self.email}
 
     def __repr__(self):
-        return f"<User(name={self.username})>"
+        return "<User(name={})>".format(self.username)
 
     def __getitem__(self, key):
         return getattr(self, key)
@@ -37,6 +37,6 @@ class Comment(Base):
     user = relationship("User", back_populates="comments")
 
     def __repr__(self):
-        return f"<Comment(text={self.text})>"
+        return "<Comment(text={})>".format(self.text)
 
 User.comments = relationship('Comment', order_by=Comment.id, back_populates="user")
