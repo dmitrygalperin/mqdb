@@ -76,7 +76,7 @@ class Mqdb(object):
 
     def on_request(self, ch, method, props, body):
         try:
-            request = json.loads(body)
+            request = json.loads(body.decode('utf-8'))
             response = self.fill_request(request)
         except JSONDecodeError as e:
             response = {'error': '{}: {}'.format(type(e).__name__, str(e))}
@@ -122,6 +122,8 @@ class Mqdb(object):
         except Exception as e:
             self.logger.info(str(e))
             return {'message': str(e)}
+
+        self.logger.info(stmt)
 
         return self.execute(stmt)
 
